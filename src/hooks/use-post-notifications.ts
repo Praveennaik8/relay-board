@@ -41,7 +41,7 @@ export function usePostNotifications() {
     return subscribeToNewPosts(
       (post) => {
         setLatestPost(post);
-        playNotificationSound();
+        void playNotificationSound();
         void showNativeNotification(`New ${post.type.replace("-", " ")} · RelayBoard`, `${post.author.name}: ${post.title}`, `relayboard-post-${post.id}`, post.author.photoURL);
       },
       (error) => setListenerError(error.message),
@@ -59,7 +59,7 @@ export function usePostNotifications() {
 
   const sendTestNotification = useCallback(async () => {
     await unlockNotificationSound();
-    playNotificationSound();
+    await playNotificationSound();
     return showNativeNotification(
       "RelayBoard alerts are on",
       "You’ll see a notification when a new post is received.",
