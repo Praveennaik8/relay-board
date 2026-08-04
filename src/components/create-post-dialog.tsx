@@ -1,0 +1,62 @@
+import { useEffect, useState, type FormEvent } from "react";
+import type { User } from "firebase/auth";
+import { LoaderCircle, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { createPost, updatePost } from "@/services/posts.service";
+import { postTypes, type CreatePostInput, type Post, type PostType, typeLabels } from "@/types";
+import { useToast } from "@/components/toast-provider";
+
+const blankPost: CreatePostInput = { type: "announcement", title: "", description: "" };
+
+export function CreatePostDialog({ user, post, onFinished, open: controlledOpen, onOpenChange }: { user: User; post?: Post; onFinished?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  const [input, setInput] = useState<CreatePostInput>(blankPost);
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+  const isEditing = Boolean(post);
+
+  useEffect(() => {
+    if (open) setInput(post ? { type: post.type, title: post.title, description: post.description } : blankPost);
+  }, [open, post]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!input.title.trim() || !input.description.trim()) return;
+    setSubmitting(true);
+    try {
+      if (post) await updatePost(post.id, { ...input, title: input.title.trim(), description: input.description.trim() });
+      else await createPost({ ...input, title: input.title.trim(), description: input.description.trim() }, user);
+      toast(post ? "Post updated for everyone." : "Post shared with your workspace.");
+      setOpen(false);
+      onFinished?.();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Unable to save post.", "error");
+    } finally { setSubmitting(false); }
+  }
+
+  return <Dialog open={open} onOpenChange={setOpen}>
+    {controlledOpen === undefined && <DialogTrigger asChild>{isEditing
+      ? <Button variant="ghost" size="sm">Edit</Button>
+      : <Button><Plus className="h-4 w-4" />New post</Button>}</DialogTrigger>}
+    <DialogContent>
+      <DialogHeader><DialogTitle>{isEditing ? "Edit post" : "Create a post"}</DialogTitle><DialogDescription>Share a clear update with everyone in Main workspace.</DialogDescription></DialogHeader>
+      <form className="grid gap-4" onSubmit={handleSubmit}>
+        <label className="grid gap-1.5 text-sm font-medium">Post type
+          <select value={input.type} onChange={(event) => setInput((current) => ({ ...current, type: event.target.value as PostType }))} className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">
+            {postTypes.map((type) => <option key={type} value={type}>{typeLabels[type]}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">Title
+          <input value={input.title} maxLength={120} onChange={(event) => setInput((current) => ({ ...current, title: event.target.value }))} placeholder="What should the team know?" className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" required />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">Details
+          <textarea value={input.description} maxLength={2000} onChange={(event) => setInput((current) => ({ ...current, description: event.target.value }))} placeholder="Add useful context, a location, or next steps." className="min-h-28 resize-y rounded-md border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring" required />
+        </label>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={submitting}>{submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isEditing ? "Save changes" : "Post update"}</Button></div>
+      </form>
+    </DialogContent>
+  </Dialog>;
+}

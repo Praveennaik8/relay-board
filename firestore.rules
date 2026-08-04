@@ -1,0 +1,114 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function postPath(workspaceId, postId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/posts/$(postId);
+    }
+    function actionPath(workspaceId, postId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/posts/$(postId)/actions/$(request.auth.uid);
+    }
+    function validAuthor(author) {
+      return author.keys().hasOnly(['uid', 'name', 'photoURL'])
+        && author.uid == request.auth.uid
+        && author.name is string
+        && (author.photoURL == null || author.photoURL is string);
+    }
+    function validCounts(counts) {
+      return counts.keys().hasOnly(['helpful', 'affected', 'join', 'acknowledge', 'claim', 'vote'])
+        && counts.helpful is int && counts.helpful >= 0
+        && counts.affected is int && counts.affected >= 0
+        && counts.join is int && counts.join >= 0
+        && counts.acknowledge is int && counts.acknowledge >= 0
+        && counts.claim is int && counts.claim >= 0
+        && counts.vote is int && counts.vote >= 0;
+    }
+    function validPostType(type) {
+      return type in ['issue', 'activity', 'tip', 'announcement', 'lost-found', 'poll'];
+    }
+    function validNewPost() {
+      return request.resource.data.keys().hasOnly(['type', 'title', 'description', 'author', 'actionCounts', 'totalActionCount', 'createdAt', 'updatedAt'])
+        && validPostType(request.resource.data.type)
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 2000
+        && validAuthor(request.resource.data.author)
+        && validCounts(request.resource.data.actionCounts)
+        && request.resource.data.actionCounts.helpful == 0 && request.resource.data.actionCounts.affected == 0
+        && request.resource.data.actionCounts.join == 0 && request.resource.data.actionCounts.acknowledge == 0
+        && request.resource.data.actionCounts.claim == 0 && request.resource.data.actionCounts.vote == 0
+        && request.resource.data.totalActionCount == 0
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
+    function validContentUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['type', 'title', 'description', 'updatedAt'])
+        && validPostType(request.resource.data.type)
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 2000
+        && request.resource.data.updatedAt == request.time;
+    }
+    function matchingAction(type, action) {
+      return (type == 'issue' && action in ['helpful', 'affected'])
+        || (type == 'activity' && action == 'join')
+        || (type == 'tip' && action == 'helpful')
+        || (type == 'announcement' && action == 'acknowledge')
+        || (type == 'lost-found' && action == 'claim')
+        || (type == 'poll' && action == 'vote');
+    }
+    function onlyCounterChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['actionCounts', 'totalActionCount', 'updatedAt'])
+        && validCounts(resource.data.actionCounts) && validCounts(request.resource.data.actionCounts)
+        && request.resource.data.totalActionCount == resource.data.totalActionCount + 1
+        && request.resource.data.updatedAt == request.time;
+    }
+    function countForActionIsIncremented(action) {
+      return (action == 'helpful' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful + 1 && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected && request.resource.data.actionCounts.join == resource.data.actionCounts.join && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote)
+        || (action == 'affected' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected + 1 && request.resource.data.actionCounts.join == resource.data.actionCounts.join && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote)
+        || (action == 'join' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected && request.resource.data.actionCounts.join == resource.data.actionCounts.join + 1 && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote)
+        || (action == 'acknowledge' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected && request.resource.data.actionCounts.join == resource.data.actionCounts.join && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge + 1 && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote)
+        || (action == 'claim' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected && request.resource.data.actionCounts.join == resource.data.actionCounts.join && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim + 1 && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote)
+        || (action == 'vote' && request.resource.data.actionCounts.helpful == resource.data.actionCounts.helpful && request.resource.data.actionCounts.affected == resource.data.actionCounts.affected && request.resource.data.actionCounts.join == resource.data.actionCounts.join && request.resource.data.actionCounts.acknowledge == resource.data.actionCounts.acknowledge && request.resource.data.actionCounts.claim == resource.data.actionCounts.claim && request.resource.data.actionCounts.vote == resource.data.actionCounts.vote + 1);
+    }
+    function validActionCounterUpdate(workspaceId, postId) {
+      let afterAction = getAfter(actionPath(workspaceId, postId));
+      return !exists(actionPath(workspaceId, postId))
+        && afterAction.data.userId == request.auth.uid
+        && matchingAction(resource.data.type, afterAction.data.actionType)
+        && onlyCounterChanged()
+        && countForActionIsIncremented(afterAction.data.actionType);
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read: if signedIn();
+
+      match /posts/{postId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && validNewPost();
+        allow update: if signedIn() && ((resource.data.author.uid == request.auth.uid && validContentUpdate()) || validActionCounterUpdate(workspaceId, postId));
+        allow delete: if signedIn() && resource.data.author.uid == request.auth.uid;
+
+        match /actions/{userId} {
+          allow read: if signedIn() && exists(postPath(workspaceId, postId));
+          allow create: if signedIn() && userId == request.auth.uid
+            && request.resource.data.keys().hasOnly(['actionType', 'userId', 'createdAt'])
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.createdAt == request.time
+            && matchingAction(get(postPath(workspaceId, postId)).data.type, request.resource.data.actionType)
+            && getAfter(postPath(workspaceId, postId)).data.totalActionCount == get(postPath(workspaceId, postId)).data.totalActionCount + 1;
+          allow update, delete: if false;
+        }
+
+        match /comments/{commentId} {
+          allow read: if signedIn() && exists(postPath(workspaceId, postId));
+          allow create: if signedIn() && exists(postPath(workspaceId, postId))
+            && request.resource.data.keys().hasOnly(['text', 'author', 'createdAt'])
+            && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+            && validAuthor(request.resource.data.author)
+            && request.resource.data.createdAt == request.time;
+          allow delete: if signedIn() && resource.data.author.uid == request.auth.uid;
+          allow update: if false;
+        }
+      }
+    }
+  }
+}
