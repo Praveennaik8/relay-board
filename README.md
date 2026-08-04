@@ -9,6 +9,7 @@ RelayBoard is a frontend-only, realtime workspace communication board built to d
 - Six post types: Issue, Activity, Tip, Announcement, Lost & Found, and Poll
 - Type-specific actions, protected from duplicate responses with an atomic Firestore transaction
 - Realtime comments loaded only when a post’s discussion is opened
+- Browser notifications for new posts while RelayBoard is open (after the user grants permission)
 - Client-side title search and type tabs
 - Offline persistence shared safely across browser tabs
 - Firestore Security Rules that validate ownership, post shapes, comments, and action-counter updates
@@ -88,6 +89,10 @@ Set the same `VITE_FIREBASE_*` values in the build environment used for Hosting.
 ## Security model
 
 Authenticated users can read the shared workspace, create posts, and update/delete only posts they authored. Comments have an immutable author and can only be deleted by their author. Each action document is keyed by the authenticated user ID and cannot be updated or deleted. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
+
+## Browser notifications
+
+Use **Enable alerts** in the header to allow native browser notifications. A realtime listener sends an alert for posts created by other people after RelayBoard has loaded; the initial feed intentionally does not generate a burst of old-post notifications. This frontend-only implementation works while the web app is open. Delivery after the browser/app is closed requires Firebase Cloud Messaging plus a trusted notification sender, which is intentionally outside this no-backend MVP.
 
 ## Future improvements
 

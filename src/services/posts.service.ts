@@ -50,6 +50,20 @@ export function subscribeToPosts(
   return onSnapshot(feed, (snapshot) => onData(snapshot.docs.map((item) => asPost(item.id, item.data()))), onError);
 }
 
+/** Listens for posts added after the initial feed hydration. */
+export function subscribeToNewPosts(
+  onPostAdded: (post: Post) => void,
+  onError: (error: Error) => void,
+  workspaceId = DEFAULT_WORKSPACE_ID,
+): Unsubscribe {
+  let hydrated = false;
+  const feed = query(postsPath(workspaceId), orderBy("createdAt", "desc"), limit(50));
+  return onSnapshot(feed, (snapshot) => {
+    if (hydrated) snapshot.docChanges().filter((change) => change.type === "added").forEach((change) => onPostAdded(asPost(change.doc.id, change.doc.data())));
+    hydrated = true;
+  }, onError);
+}
+
 export async function createPost(input: CreatePostInput, user: User, workspaceId = DEFAULT_WORKSPACE_ID) {
   return addDoc(postsPath(workspaceId), {
     ...input,
