@@ -92,7 +92,7 @@ Authenticated users can read the shared workspace, create posts, and update/dele
 
 ## Browser notifications
 
-Use **Enable alerts** in the header to allow native browser notifications. A realtime listener sends an alert for posts created by other people after RelayBoard has loaded; the initial feed intentionally does not generate a burst of old-post notifications. This frontend-only implementation works while the web app is open. Delivery after the browser/app is closed requires Firebase Cloud Messaging plus a trusted notification sender, which is intentionally outside this no-backend MVP.
+Use **Enable alerts** in the header to allow native browser notifications. Once granted, the bell becomes a test-alert button. A realtime listener sends an alert for every post created after RelayBoard has loaded; the initial feed intentionally does not generate a burst of old-post notifications. The app also displays an in-app receipt toast when the listener receives a new post, making browser/OS delivery problems visible. This frontend-only implementation works while the web app is open. Delivery after the browser/app is closed requires Firebase Cloud Messaging plus a trusted notification sender, which is intentionally outside this no-backend MVP.
 
 ## Future improvements
 
