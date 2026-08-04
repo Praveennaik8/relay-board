@@ -108,6 +108,7 @@ Important limitations:
 - This is an in-browser notification implementation, so RelayBoard must remain open.
 - A native alert is attempted for every new post received after permission is granted. The workspace also shows an in-app receipt toast, which helps distinguish a Firestore-listener failure from an OS/browser notification failure.
 - Browser notifications generally require `https://` (or `http://localhost`) and can be blocked by browser or OS settings.
+- Native notification sound cannot be forced by the web platform. `src/services/notification-sound.service.ts` plays a lightweight in-app chime after the user enables or tests alerts; this only works while the page is open.
 - Closed-app/background notifications require Firebase Cloud Messaging and a trusted sender; that is outside this frontend-only MVP.
 
 If notifications are being changed, test permission state first (`Notification.permission`), then verify the Firestore listener receives an `added` change from another account before changing notification delivery code.

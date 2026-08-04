@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Post } from "@/types";
 import { subscribeToNewPosts } from "@/services/posts.service";
+import { playNotificationSound, unlockNotificationSound } from "@/services/notification-sound.service";
 
 type NotificationStatus = "unsupported" | NotificationPermission;
 
@@ -40,6 +41,7 @@ export function usePostNotifications() {
     return subscribeToNewPosts(
       (post) => {
         setLatestPost(post);
+        playNotificationSound();
         void showNativeNotification(`New ${post.type.replace("-", " ")} · RelayBoard`, `${post.author.name}: ${post.title}`, `relayboard-post-${post.id}`, post.author.photoURL);
       },
       (error) => setListenerError(error.message),
@@ -48,17 +50,22 @@ export function usePostNotifications() {
 
   const requestPermission = useCallback(async () => {
     if (!("Notification" in window)) { setStatus("unsupported"); return "unsupported" as const; }
+    await unlockNotificationSound();
     const nextStatus = await Notification.requestPermission();
     setStatus(nextStatus);
     if (nextStatus === "granted") await workerRegistration();
     return nextStatus;
   }, []);
 
-  const sendTestNotification = useCallback(() => showNativeNotification(
-    "RelayBoard alerts are on",
-    "You’ll see a notification when a new post is received.",
-    "relayboard-notification-test",
-  ), []);
+  const sendTestNotification = useCallback(async () => {
+    await unlockNotificationSound();
+    playNotificationSound();
+    return showNativeNotification(
+      "RelayBoard alerts are on",
+      "You’ll see a notification when a new post is received.",
+      "relayboard-notification-test",
+    );
+  }, []);
 
   return { status, latestPost, listenerError, requestPermission, sendTestNotification };
 }
