@@ -58,6 +58,7 @@ export function PostCard({ post, user }: { post: Post; user: User }) {
         <Avatar name={post.author.name} src={post.author.photoURL} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate text-sm font-semibold">{post.author.name}</span><span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span></div></div>
+            <ExpiryBadge expiresAt={post.expiresAt} />
             {post.author.uid === user.uid && <><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Post options</span></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => setEditing(true)}>Edit post</DropdownMenuItem><DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onSelect={remove}>Delete post</DropdownMenuItem></DropdownMenuContent></DropdownMenu><CreatePostDialog post={post} user={user} open={editing} onOpenChange={setEditing} /></>}
           </div>
           <div className="mt-4 flex items-center gap-2"><Badge className={style.className}><TypeIcon className="mr-1 h-3.5 w-3.5" />{typeLabels[post.type]}</Badge>{post.updatedAt && post.createdAt && post.updatedAt.seconds - post.createdAt.seconds > 1 && <span className="text-xs text-muted-foreground">Edited</span>}</div>
@@ -79,4 +80,16 @@ function ActionButton({ label, count, selected, disabled, onClick }: { label: st
   return <Button variant={selected ? "secondary" : "outline"} size="sm" disabled={disabled} onClick={onClick} className={selected ? "border border-blue-200 bg-blue-50 text-blue-700" : "text-slate-600"}>
     {selected ? <Check className="h-3.5 w-3.5" /> : <HandHeart className="h-3.5 w-3.5" />}{selected ? "Responded" : label}<span className="ml-0.5 text-muted-foreground">{count}</span>
   </Button>;
+}
+
+function ExpiryBadge({ expiresAt }: { expiresAt: Post["expiresAt"] }) {
+  if (!expiresAt) return null;
+  const label = `Expires at ${expiresAt.toDate().toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+
+  return <span className="shrink-0 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">{label}</span>;
 }

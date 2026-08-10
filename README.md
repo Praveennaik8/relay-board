@@ -77,7 +77,9 @@ Actions are a subcollection because each user needs a durable, unique response r
    firebase deploy --only firestore,functions
    ```
 
-7. Enable Firestore TTL for the `expiresAt` field on the `posts` collection group. `null` means a post is persistent; every timed post stores a timestamp:
+7. Enable Firestore TTL for the `expiresAt` field on the `posts` collection group. `null` means a post is persistent; every timed post stores a timestamp. You can do this without installing any CLI: open **Google Cloud Console → Firestore → Databases → your database → Time-to-live**, create a policy with collection group `posts` and timestamp field `expiresAt`, then save it.
+
+   Alternatively, use Google Cloud Shell in the console (where `gcloud` is already installed) or run:
 
    ```bash
    gcloud firestore fields ttls update expiresAt --collection-group=posts --enable-ttl --async
