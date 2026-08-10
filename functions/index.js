@@ -3,6 +3,7 @@ const { getFirestore } = require("firebase-admin/firestore");
 const { logger } = require("firebase-functions");
 const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
 
+
 initializeApp();
 
 /**
@@ -12,6 +13,7 @@ initializeApp();
 exports.cleanupDeletedPost = onDocumentDeleted(
   {
     document: "workspaces/{workspaceId}/posts/{postId}",
+    ingressSettings: "ALLOW_INTERNAL_ONLY",
     memory: "1GiB",
     retry: true,
     timeoutSeconds: 540,
