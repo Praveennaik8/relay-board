@@ -1,6 +1,6 @@
 # RelayBoard
 
-RelayBoard is a frontend-only, realtime workspace communication board built to demonstrate Firebase Firestore as a Backend-as-a-Service. There is no custom server, Express app, or REST API: the React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK.
+RelayBoard is a realtime workspace communication board built with Firebase. The React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK; a small trusted Cloud Function recursively cleans up post subcollections after a post is deleted.
 
 ## Highlights
 
@@ -24,6 +24,7 @@ src/
   pages/            Sign-in and workspace routes
   services/         Firebase Authentication and Firestore operations
   types/            Shared data model and post/action metadata
+functions/          Firestore deletion trigger for post cleanup
 ```
 
 `services/posts.service.ts` contains all Firestore writes and listeners. UI components never assemble Firestore paths or run transactions themselves. The feed is a direct `onSnapshot` listener ordered by `createdAt`; choosing a post-type tab adds a Firestore `where` filter. Comments are independently subscribed when opened. Action writes use `runTransaction` to create one action document per user and update the denormalized count in the same atomic commit.
@@ -38,7 +39,7 @@ workspaces/{workspaceId}
     type: "issue" | "activity" | "tip" | "announcement" | "lost-found" | "poll"
     title, description
     author: { uid, name, photoURL }
-    createdAt, updatedAt
+    createdAt, updatedAt, expiresAt
     actionCounts: { helpful, affected, join, acknowledge, claim, vote }
     totalActionCount
     actions/{userId}
@@ -67,12 +68,19 @@ Actions are a subcollection because each user needs a durable, unique response r
    npm run dev
    ```
 
-6. Deploy the included `firestore.rules` before testing authenticated writes:
+6. Install the cleanup function's dependencies (it deploys on Node.js 22), then deploy the included Firestore configuration and function before testing authenticated writes:
 
    ```bash
    firebase login
    firebase use YOUR_PROJECT_ID
-   firebase deploy --only firestore:rules
+   npm --prefix functions install
+   firebase deploy --only firestore,functions
+   ```
+
+7. Enable Firestore TTL for the `expiresAt` field on the `posts` collection group. `null` means a post is persistent; every timed post stores a timestamp:
+
+   ```bash
+   gcloud firestore fields ttls update expiresAt --collection-group=posts --enable-ttl --async
    ```
 
 ## Deploy to Firebase Hosting
@@ -90,6 +98,10 @@ Set the same `VITE_FIREBASE_*` values in the build environment used for Hosting.
 
 Authenticated users can read the shared workspace, create posts, and update/delete only posts they authored. Comments have an immutable author and can only be deleted by their author. Each action document is keyed by the authenticated user ID and cannot be updated or deleted. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
 
+## Disappearing posts
+
+New posts disappear after 24 hours by default. The author can select a duration in minutes, hours, or days, or uncheck the visibility option to keep the post indefinitely. Timed posts use an `expiresAt` timestamp: the client hides them as soon as that time passes and Firestore TTL then permanently deletes the parent post document. A Cloud Function responds to every post deletion (TTL or manual) and recursively removes the post's action and comment subcollections as well.
+
 ## Browser notifications
 
 Use **Enable alerts** in the header to allow native browser notifications. Once granted, the bell becomes a test-alert button. A realtime listener sends an alert for every post created after RelayBoard has loaded; the initial feed intentionally does not generate a burst of old-post notifications. The app also displays an in-app receipt toast when the listener receives a new post, making browser/OS delivery problems visible. This frontend-only implementation works while the web app is open. Delivery after the browser/app is closed requires Firebase Cloud Messaging plus a trusted notification sender, which is intentionally outside this no-backend MVP.
@@ -100,7 +112,6 @@ RelayBoard also plays a small in-app chime while it is open. Native notification
 
 - Workspace membership documents and role-based rules
 - Pagination with cursors for large feeds
-- Cloud Functions or an admin cleanup workflow for orphaned subcollections after a post delete
 - Post attachments via Firebase Storage
 - Push notifications and unread state
 - Poll options and per-option aggregates

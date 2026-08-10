@@ -27,8 +27,12 @@ service cloud.firestore {
     function validPostType(type) {
       return type in ['issue', 'activity', 'tip', 'announcement', 'lost-found', 'poll'];
     }
+    function validExpiration(expiresAt) {
+      return expiresAt == null || (expiresAt is timestamp && expiresAt > request.time);
+    }
     function validNewPost() {
-      return request.resource.data.keys().hasOnly(['type', 'title', 'description', 'author', 'actionCounts', 'totalActionCount', 'createdAt', 'updatedAt'])
+      return request.resource.data.keys().hasOnly(['type', 'title', 'description', 'author', 'actionCounts', 'totalActionCount', 'createdAt', 'updatedAt', 'expiresAt'])
+        && request.resource.data.keys().hasAll(['expiresAt'])
         && validPostType(request.resource.data.type)
         && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120
         && request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 2000
@@ -38,6 +42,7 @@ service cloud.firestore {
         && request.resource.data.actionCounts.join == 0 && request.resource.data.actionCounts.acknowledge == 0
         && request.resource.data.actionCounts.claim == 0 && request.resource.data.actionCounts.vote == 0
         && request.resource.data.totalActionCount == 0
+        && validExpiration(request.resource.data.expiresAt)
         && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
     }
     function validContentUpdate() {

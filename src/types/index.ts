@@ -20,6 +20,8 @@ export interface Post {
   author: Author;
   createdAt: Timestamp | null;
   updatedAt?: Timestamp | null;
+  /** Null means the author chose to keep the post indefinitely. */
+  expiresAt: Timestamp | null;
   actionCounts: ActionCounts;
   totalActionCount: number;
 }
@@ -35,6 +37,8 @@ export interface CreatePostInput {
   type: PostType;
   title: string;
   description: string;
+  /** Undefined uses the 24-hour default; null keeps the post indefinitely. */
+  expiresAt?: Timestamp | null;
 }
 
 export const actionMeta: Record<PostType, { label: string; action: ActionType; secondary?: { label: string; action: ActionType } }> = {

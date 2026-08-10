@@ -8,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
   type DocumentData,
@@ -19,6 +20,7 @@ import { actionMeta, emptyActionCounts, type ActionType, type Comment, type Crea
 
 const postsPath = (workspaceId = DEFAULT_WORKSPACE_ID) => collection(db, "workspaces", workspaceId, "posts");
 const postRef = (postId: string, workspaceId = DEFAULT_WORKSPACE_ID) => doc(db, "workspaces", workspaceId, "posts", postId);
+export const DEFAULT_POST_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 function authorFromUser(user: User) {
   return { uid: user.uid, name: user.displayName || "Anonymous", photoURL: user.photoURL };
@@ -33,6 +35,7 @@ function asPost(id: string, data: DocumentData): Post {
     author: data.author,
     createdAt: data.createdAt ?? null,
     updatedAt: data.updatedAt ?? null,
+    expiresAt: data.expiresAt ?? null,
     actionCounts: { ...emptyActionCounts(), ...(data.actionCounts ?? {}) },
     totalActionCount: data.totalActionCount ?? 0,
   };
@@ -65,8 +68,10 @@ export function subscribeToNewPosts(
 }
 
 export async function createPost(input: CreatePostInput, user: User, workspaceId = DEFAULT_WORKSPACE_ID) {
+  const expiresAt = input.expiresAt === undefined ? Timestamp.fromMillis(Date.now() + DEFAULT_POST_EXPIRY_MS) : input.expiresAt;
   return addDoc(postsPath(workspaceId), {
     ...input,
+    expiresAt,
     author: authorFromUser(user),
     actionCounts: emptyActionCounts(),
     totalActionCount: 0,
@@ -80,7 +85,7 @@ export async function updatePost(postId: string, input: Pick<CreatePostInput, "t
 }
 
 export async function deletePost(postId: string, workspaceId = DEFAULT_WORKSPACE_ID) {
-  // Subcollections remain inaccessible after deletion; a scheduled cleanup can remove them later.
+  // The Cloud Function deletion trigger recursively removes actions and comments.
   await runTransaction(db, async (transaction) => {
     transaction.delete(postRef(postId, workspaceId));
   });
