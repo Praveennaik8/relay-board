@@ -15,11 +15,11 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import type { User } from "firebase/auth";
-import { db, DEFAULT_WORKSPACE_ID } from "@/firebase/config";
+import { db } from "@/firebase/config";
 import { actionMeta, emptyActionCounts, type ActionType, type Comment, type CreatePostInput, type Post } from "@/types";
 
-const postsPath = (workspaceId = DEFAULT_WORKSPACE_ID) => collection(db, "workspaces", workspaceId, "posts");
-const postRef = (postId: string, workspaceId = DEFAULT_WORKSPACE_ID) => doc(db, "workspaces", workspaceId, "posts", postId);
+const postsPath = (workspaceId: string) => collection(db, "workspaces", workspaceId, "posts");
+const postRef = (postId: string, workspaceId: string) => doc(db, "workspaces", workspaceId, "posts", postId);
 export const DEFAULT_POST_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 function authorFromUser(user: User) {
@@ -44,7 +44,7 @@ function asPost(id: string, data: DocumentData): Post {
 export function subscribeToPosts(
   onData: (posts: Post[]) => void,
   onError: (error: Error) => void,
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
   type?: Post["type"],
 ): Unsubscribe {
   const feed = type
@@ -57,7 +57,7 @@ export function subscribeToPosts(
 export function subscribeToNewPosts(
   onPostAdded: (post: Post) => void,
   onError: (error: Error) => void,
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
 ): Unsubscribe {
   let hydrated = false;
   const feed = query(postsPath(workspaceId), orderBy("createdAt", "desc"), limit(50));
@@ -67,7 +67,7 @@ export function subscribeToNewPosts(
   }, onError);
 }
 
-export async function createPost(input: CreatePostInput, user: User, workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function createPost(input: CreatePostInput, user: User, workspaceId: string) {
   const expiresAt = input.expiresAt === undefined ? Timestamp.fromMillis(Date.now() + DEFAULT_POST_EXPIRY_MS) : input.expiresAt;
   return addDoc(postsPath(workspaceId), {
     ...input,
@@ -80,11 +80,11 @@ export async function createPost(input: CreatePostInput, user: User, workspaceId
   });
 }
 
-export async function updatePost(postId: string, input: Pick<CreatePostInput, "title" | "description" | "type">, workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function updatePost(postId: string, input: Pick<CreatePostInput, "title" | "description" | "type">, workspaceId: string) {
   await updateDoc(postRef(postId, workspaceId), { ...input, updatedAt: serverTimestamp() });
 }
 
-export async function deletePost(postId: string, workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function deletePost(postId: string, workspaceId: string) {
   // The Cloud Function deletion trigger recursively removes actions and comments.
   await runTransaction(db, async (transaction) => {
     transaction.delete(postRef(postId, workspaceId));
@@ -95,13 +95,13 @@ export function subscribeToComments(
   postId: string,
   onData: (comments: Comment[]) => void,
   onError: (error: Error) => void,
-  workspaceId = DEFAULT_WORKSPACE_ID,
+  workspaceId: string,
 ): Unsubscribe {
   const comments = query(collection(postRef(postId, workspaceId), "comments"), orderBy("createdAt", "asc"), limit(100));
   return onSnapshot(comments, (snapshot) => onData(snapshot.docs.map((item) => ({ id: item.id, ...item.data(), createdAt: item.data().createdAt ?? null }) as Comment)), onError);
 }
 
-export async function addComment(postId: string, text: string, user: User, workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function addComment(postId: string, text: string, user: User, workspaceId: string) {
   await addDoc(collection(postRef(postId, workspaceId), "comments"), {
     text: text.trim(),
     author: authorFromUser(user),
@@ -109,7 +109,7 @@ export async function addComment(postId: string, text: string, user: User, works
   });
 }
 
-export async function performAction(post: Post, action: ActionType, user: User, workspaceId = DEFAULT_WORKSPACE_ID) {
+export async function performAction(post: Post, action: ActionType, user: User, workspaceId: string) {
   const expected = actionMeta[post.type];
   const isSupported = expected.action === action || expected.secondary?.action === action;
   if (!isSupported) throw new Error("That action is not available for this post.");

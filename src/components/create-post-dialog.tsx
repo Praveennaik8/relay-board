@@ -16,7 +16,7 @@ const expiryUnits = {
 } as const;
 type ExpiryUnit = keyof typeof expiryUnits;
 
-export function CreatePostDialog({ user, post, onFinished, open: controlledOpen, onOpenChange }: { user: User; post?: Post; onFinished?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function CreatePostDialog({ user, workspaceId, post, onFinished, open: controlledOpen, onOpenChange }: { user: User; workspaceId: string; post?: Post; onFinished?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -45,10 +45,10 @@ export function CreatePostDialog({ user, post, onFinished, open: controlledOpen,
     }
     setSubmitting(true);
     try {
-      if (post) await updatePost(post.id, { ...input, title: input.title.trim(), description: input.description.trim() });
+      if (post) await updatePost(post.id, { ...input, title: input.title.trim(), description: input.description.trim() }, workspaceId);
       else {
         const expiresAt = disappearsAfter ? Timestamp.fromMillis(Date.now() + expiryAmount * expiryUnits[expiryUnit]) : null;
-        await createPost({ ...input, title: input.title.trim(), description: input.description.trim(), expiresAt }, user);
+        await createPost({ ...input, title: input.title.trim(), description: input.description.trim(), expiresAt }, user, workspaceId);
       }
       toast(post ? "Post updated for everyone." : "Post shared with your workspace.");
       setOpen(false);
@@ -63,7 +63,7 @@ export function CreatePostDialog({ user, post, onFinished, open: controlledOpen,
       ? <Button variant="ghost" size="sm">Edit</Button>
       : <Button><Plus className="h-4 w-4" />New post</Button>}</DialogTrigger>}
     <DialogContent>
-      <DialogHeader><DialogTitle>{isEditing ? "Edit post" : "Create a post"}</DialogTitle><DialogDescription>Share a clear update with everyone in Main workspace.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{isEditing ? "Edit post" : "Create a post"}</DialogTitle><DialogDescription>Share a clear update with everyone on this board.</DialogDescription></DialogHeader>
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <label className="grid gap-1.5 text-sm font-medium">Post type
           <select value={input.type} onChange={(event) => setInput((current) => ({ ...current, type: event.target.value as PostType }))} className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">

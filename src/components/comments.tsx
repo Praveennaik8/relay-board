@@ -8,7 +8,7 @@ import { formatRelativeTime } from "@/lib/utils";
 import { addComment } from "@/services/posts.service";
 import type { Comment } from "@/types";
 
-export function Comments({ comments, postId, user }: { comments: Comment[]; postId: string; user: User }) {
+export function Comments({ comments, postId, user, workspaceId }: { comments: Comment[]; postId: string; user: User; workspaceId: string }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
@@ -16,7 +16,7 @@ export function Comments({ comments, postId, user }: { comments: Comment[]; post
     event.preventDefault();
     if (!text.trim()) return;
     setSending(true);
-    try { await addComment(postId, text, user); setText(""); }
+    try { await addComment(postId, text, user, workspaceId); setText(""); }
     catch (error) { toast(error instanceof Error ? error.message : "Could not add comment.", "error"); }
     finally { setSending(false); }
   }

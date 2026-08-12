@@ -4,7 +4,7 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
-      if (windows.length) return windows[0].focus();
+      if (windows.length) return windows[0].navigate(targetUrl).then((client) => client?.focus());
       return self.clients.openWindow(targetUrl);
     }),
   );

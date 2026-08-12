@@ -10,6 +10,22 @@ export interface Author {
   photoURL: string | null;
 }
 
+export interface Board {
+  id: string;
+  name: string;
+  createdByName: string;
+  createdAt: Timestamp | null;
+  memberCount: number;
+}
+
+export type BoardRole = "owner" | "member";
+
+export interface BoardMembership {
+  boardId: string;
+  role: BoardRole;
+  joinedAt: Timestamp | null;
+}
+
 export type ActionCounts = Record<ActionType, number>;
 
 export interface Post {

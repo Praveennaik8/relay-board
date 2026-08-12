@@ -15,15 +15,15 @@ async function workerRegistration() {
   return existing ?? navigator.serviceWorker.register("/notification-sw.js", { scope: "/" });
 }
 
-async function showNativeNotification(title: string, body: string, tag: string, icon?: string | null) {
+async function showNativeNotification(title: string, body: string, tag: string, icon?: string | null, url = "/") {
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
   try {
     const registration = await workerRegistration();
     if (registration) {
-      await registration.showNotification(title, { body, icon: icon ?? undefined, tag, data: { url: "/" } });
+      await registration.showNotification(title, { body, icon: icon ?? undefined, tag, data: { url } });
     } else {
       const notification = new Notification(title, { body, icon: icon ?? undefined, tag });
-      notification.onclick = () => { window.focus(); notification.close(); };
+      notification.onclick = () => { window.focus(); window.location.assign(url); notification.close(); };
     }
     return true;
   } catch {
@@ -31,7 +31,7 @@ async function showNativeNotification(title: string, body: string, tag: string, 
   }
 }
 
-export function usePostNotifications() {
+export function usePostNotifications(workspaceId: string) {
   const [status, setStatus] = useState<NotificationStatus>(getStatus);
   const [latestPost, setLatestPost] = useState<Post | null>(null);
   const [listenerError, setListenerError] = useState<string | null>(null);
@@ -42,11 +42,12 @@ export function usePostNotifications() {
       (post) => {
         setLatestPost(post);
         void playNotificationSound();
-        void showNativeNotification(`New ${post.type.replace("-", " ")} · RelayBoard`, `${post.author.name}: ${post.title}`, `relayboard-post-${post.id}`, post.author.photoURL);
+        void showNativeNotification(`New ${post.type.replace("-", " ")} · RelayBoard`, `${post.author.name}: ${post.title}`, `relayboard-post-${workspaceId}-${post.id}`, post.author.photoURL, `/boards/${workspaceId}`);
       },
       (error) => setListenerError(error.message),
+      workspaceId,
     );
-  }, [status]);
+  }, [status, workspaceId]);
 
   const requestPermission = useCallback(async () => {
     if (!("Notification" in window)) { setStatus("unsupported"); return "unsupported" as const; }

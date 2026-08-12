@@ -23,12 +23,12 @@ const typeStyle: Record<PostType, { icon: typeof CircleAlert; className: string 
   poll: { icon: Vote, className: "bg-pink-50 text-pink-700 ring-pink-100" },
 };
 
-export function PostCard({ post, user }: { post: Post; user: User }) {
+export function PostCard({ post, user, workspaceId }: { post: Post; user: User; workspaceId: string }) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
-  const ownAction = useOwnAction(post.id, user.uid);
+  const ownAction = useOwnAction(workspaceId, post.id, user.uid);
   const { toast } = useToast();
   const meta = actionMeta[post.type];
   const style = typeStyle[post.type];
@@ -36,19 +36,19 @@ export function PostCard({ post, user }: { post: Post; user: User }) {
 
   useEffect(() => {
     if (!commentsOpen) return;
-    return subscribeToComments(post.id, setComments, (error) => toast(error.message, "error"));
-  }, [commentsOpen, post.id, toast]);
+    return subscribeToComments(post.id, setComments, (error) => toast(error.message, "error"), workspaceId);
+  }, [commentsOpen, post.id, toast, workspaceId]);
 
   async function act(action: ActionType) {
     setActing(true);
-    try { await performAction(post, action, user); toast("Your response was shared."); }
+    try { await performAction(post, action, user, workspaceId); toast("Your response was shared."); }
     catch (error) { toast(error instanceof Error ? error.message : "Could not save your response.", "error"); }
     finally { setActing(false); }
   }
 
   async function remove() {
     if (!window.confirm("Delete this post? This cannot be undone.")) return;
-    try { await deletePost(post.id); toast("Post deleted."); }
+    try { await deletePost(post.id, workspaceId); toast("Post deleted."); }
     catch (error) { toast(error instanceof Error ? error.message : "Could not delete post.", "error"); }
   }
 
@@ -59,7 +59,7 @@ export function PostCard({ post, user }: { post: Post; user: User }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="truncate text-sm font-semibold">{post.author.name}</span><span className="text-xs text-muted-foreground">{formatRelativeTime(post.createdAt)}</span></div></div>
             <ExpiryBadge expiresAt={post.expiresAt} />
-            {post.author.uid === user.uid && <><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Post options</span></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => setEditing(true)}>Edit post</DropdownMenuItem><DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onSelect={remove}>Delete post</DropdownMenuItem></DropdownMenuContent></DropdownMenu><CreatePostDialog post={post} user={user} open={editing} onOpenChange={setEditing} /></>}
+            {post.author.uid === user.uid && <><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Post options</span></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => setEditing(true)}>Edit post</DropdownMenuItem><DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onSelect={remove}>Delete post</DropdownMenuItem></DropdownMenuContent></DropdownMenu><CreatePostDialog post={post} user={user} workspaceId={workspaceId} open={editing} onOpenChange={setEditing} /></>}
           </div>
           <div className="mt-4 flex items-center gap-2"><Badge className={style.className}><TypeIcon className="mr-1 h-3.5 w-3.5" />{typeLabels[post.type]}</Badge>{post.updatedAt && post.createdAt && post.updatedAt.seconds - post.createdAt.seconds > 1 && <span className="text-xs text-muted-foreground">Edited</span>}</div>
           <h2 className="mt-3 text-base font-semibold tracking-tight text-slate-900 sm:text-lg">{post.title}</h2>
@@ -69,7 +69,7 @@ export function PostCard({ post, user }: { post: Post; user: User }) {
             {meta.secondary && <ActionButton label={meta.secondary.label} count={post.actionCounts[meta.secondary.action]} selected={ownAction === meta.secondary.action} disabled={acting || Boolean(ownAction)} onClick={() => act(meta.secondary!.action)} />}
             <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={() => setCommentsOpen((open) => !open)}>Comments <ChevronDown className={`h-3.5 w-3.5 transition-transform ${commentsOpen ? "rotate-180" : ""}`} /></Button>
           </div>
-          {commentsOpen && <Comments comments={comments} postId={post.id} user={user} />}
+          {commentsOpen && <Comments comments={comments} postId={post.id} user={user} workspaceId={workspaceId} />}
         </div>
       </div>
     </CardContent>

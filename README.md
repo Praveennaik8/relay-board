@@ -1,11 +1,12 @@
 # RelayBoard
 
-RelayBoard is a realtime workspace communication board built with Firebase. The React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK; a small trusted Cloud Function recursively cleans up post subcollections after a post is deleted.
+RelayBoard is a realtime multi-board communication app built with Firebase. The React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK; trusted Cloud Functions create boards, validate access codes, and recursively clean up post subcollections after a post is deleted.
 
 ## Highlights
 
-- Google sign-in and a compact user profile in the workspace header
-- Realtime post feed powered by `onSnapshot`
+- Google sign-in, a discoverable board directory, and a compact user profile
+- Access-code-gated board membership, validated by a trusted Cloud Function
+- Realtime board feeds powered by `onSnapshot`
 - Six post types: Issue, Activity, Tip, Announcement, Lost & Found, and Poll
 - Type-specific actions, protected from duplicate responses with an atomic Firestore transaction
 - Realtime comments loaded only when a post’s discussion is opened
@@ -21,20 +22,25 @@ src/
   components/       UI components and shadcn-style primitives
   firebase/         Firebase SDK initialization and configuration
   hooks/            Realtime/auth state hooks
-  pages/            Sign-in and workspace routes
+  pages/            Sign-in, board directory, and board routes
   services/         Firebase Authentication and Firestore operations
   types/            Shared data model and post/action metadata
-functions/          Firestore deletion trigger for post cleanup
+functions/          Board create/join and Firestore cleanup functions
 ```
 
 `services/posts.service.ts` contains all Firestore writes and listeners. UI components never assemble Firestore paths or run transactions themselves. The feed is a direct `onSnapshot` listener ordered by `createdAt`; choosing a post-type tab adds a Firestore `where` filter. Comments are independently subscribed when opened. Action writes use `runTransaction` to create one action document per user and update the denormalized count in the same atomic commit.
 
 ## Firestore schema
 
-The default workspace is `main`. The `workspaces` collection makes the model ready for multiple workspaces without changing post paths.
+Board records live in the `workspaces` collection. Their top-level metadata is discoverable to signed-in users; posts and membership data are available only after the user joins with the board's access code.
 
 ```
 workspaces/{workspaceId}
+  name, createdByName, createdAt, memberCount
+  members/{userId}
+    userId, name, photoURL, role: "owner" | "member", joinedAt
+  _private/access
+    salt, accessCodeHash
   posts/{postId}
     type: "issue" | "activity" | "tip" | "announcement" | "lost-found" | "poll"
     title, description
@@ -46,6 +52,9 @@ workspaces/{workspaceId}
       userId, actionType, createdAt
     comments/{commentId}
       text, author, createdAt
+
+users/{userId}/boardMemberships/{workspaceId}
+  boardId, role, joinedAt
 ```
 
 Actions are a subcollection because each user needs a durable, unique response record. Comments are a subcollection to avoid unbounded post documents. Aggregate action counts live on the post for a quick feed render and are updated atomically alongside the action record. The included index supports the type-filtered newest-first feed; comments use Firestore’s automatic single-field indexes.
@@ -85,6 +94,8 @@ Actions are a subcollection because each user needs a durable, unique response r
    gcloud firestore fields ttls update expiresAt --collection-group=posts --enable-ttl --async
    ```
 
+> **Existing `main` workspace:** releases created before multi-board support wrote posts below `workspaces/main` without a board document or memberships. The new rules intentionally block that old open workspace. Its documents are not deleted, but migrate them with a trusted Admin SDK script before deployment if you need to retain them.
+
 ## Deploy to Firebase Hosting
 
 Build the static React app and deploy it with the included `firebase.json`:
@@ -98,7 +109,7 @@ Set the same `VITE_FIREBASE_*` values in the build environment used for Hosting.
 
 ## Security model
 
-Authenticated users can read the shared workspace, create posts, and update/delete only posts they authored. Comments have an immutable author and can only be deleted by their author. Each action document is keyed by the authenticated user ID and cannot be updated or deleted. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
+Any authenticated user can list board cards, but only board members can read posts, comments, actions, or membership data. Creating boards and joining them happen through callable Cloud Functions. Access codes are salted and hashed in a private document that client security rules deny completely; five failed attempts from the same account are throttled for 15 minutes. Members can create posts and comments, update/delete only their own posts, and respond only once. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
 
 ## Disappearing posts
 
@@ -112,7 +123,7 @@ RelayBoard also plays a small in-app chime while it is open. Native notification
 
 ## Future improvements
 
-- Workspace membership documents and role-based rules
+- Owner controls for access-code rotation and membership management
 - Pagination with cursors for large feeds
 - Post attachments via Firebase Storage
 - Push notifications and unread state

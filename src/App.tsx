@@ -2,13 +2,14 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { isFirebaseConfigured } from "@/firebase/config";
 import { SignInPage } from "@/pages/sign-in-page";
-import { WorkspacePage } from "@/pages/workspace-page";
+import { BoardDirectoryPage } from "@/pages/board-directory-page";
+import { BoardPage } from "@/pages/board-page";
 
 export default function App() {
   const { user, loading } = useAuth();
   if (!isFirebaseConfigured) return <ConfigurationRequired />;
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f8fafc] text-sm text-muted-foreground">Opening RelayBoard…</div>;
-  return <Routes><Route path="/" element={user ? <WorkspacePage user={user} /> : <SignInPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes>;
+  return <Routes><Route path="/" element={<Navigate to={user ? "/boards" : "/sign-in"} replace />} /><Route path="/sign-in" element={user ? <Navigate to="/boards" replace /> : <SignInPage />} /><Route path="/boards" element={user ? <BoardDirectoryPage user={user} /> : <Navigate to="/sign-in" replace />} /><Route path="/boards/:boardId" element={user ? <BoardPage user={user} /> : <Navigate to="/sign-in" replace />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes>;
 }
 
 function ConfigurationRequired() {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { subscribeToPosts } from "@/services/posts.service";
 import type { Post, PostType } from "@/types";
 
-export function usePosts(type?: PostType) {
+export function usePosts(workspaceId: string, type?: PostType) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
@@ -14,10 +14,10 @@ export function usePosts(type?: PostType) {
     return subscribeToPosts(
       (nextPosts) => { setPosts(nextPosts); setLoading(false); },
       (nextError) => { setError(nextError.message); setLoading(false); },
-      undefined,
+      workspaceId,
       type,
     );
-  }, [type]);
+  }, [workspaceId, type]);
 
   useEffect(() => {
     const nextExpiry = posts.reduce<number | null>((earliest, post) => {
