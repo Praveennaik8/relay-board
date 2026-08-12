@@ -1,6 +1,6 @@
-import { collection, doc, limit, onSnapshot, orderBy, query, type DocumentData, type Unsubscribe } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "@/firebase/config";
+import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, writeBatch, type DocumentData, type Unsubscribe } from "firebase/firestore";
+import type { User } from "firebase/auth";
+import { db } from "@/firebase/config";
 import type { Board, BoardMembership } from "@/types";
 
 const boardsPath = collection(db, "workspaces");
@@ -37,12 +37,33 @@ export function subscribeToJoinedBoardIds(userId: string, onData: (boardIds: Set
   return onSnapshot(memberships, (snapshot) => onData(new Set(snapshot.docs.map((item) => item.id))), onError);
 }
 
-export async function createBoard(name: string, accessCode: string) {
-  const create = httpsCallable<{ name: string; accessCode: string }, { boardId: string }>(functions, "createBoard");
-  return (await create({ name, accessCode })).data;
+export async function createBoard(name: string, accessCode: string, user: User) {
+  const board = doc(boardsPath);
+  const member = doc(board, "members", user.uid);
+  const access = doc(board, "_private", "access");
+  const userMembership = doc(db, "users", user.uid, "boardMemberships", board.id);
+  const batch = writeBatch(db);
+  const profile = { userId: user.uid, name: user.displayName || "Anonymous", photoURL: user.photoURL };
+
+  batch.set(board, { name: name.trim(), createdByName: profile.name, createdAt: serverTimestamp(), memberCount: 1 });
+  batch.set(member, { ...profile, role: "owner", joinedAt: serverTimestamp() });
+  batch.set(access, { accessCode: accessCode.trim(), createdAt: serverTimestamp() });
+  batch.set(userMembership, { boardId: board.id, role: "owner", joinedAt: serverTimestamp() });
+  await batch.commit();
+  return { boardId: board.id };
 }
 
-export async function joinBoard(boardId: string, accessCode: string) {
-  const join = httpsCallable<{ boardId: string; accessCode: string }, { joined: boolean }>(functions, "joinBoard");
-  return (await join({ boardId, accessCode })).data;
+export async function joinBoard(boardId: string, accessCode: string, user: User) {
+  try {
+    await writeBatch(db).set(doc(db, "workspaces", boardId, "joinRequests", user.uid), {
+      userId: user.uid,
+      name: user.displayName || "Anonymous",
+      photoURL: user.photoURL,
+      accessCode: accessCode.trim(),
+      requestedAt: serverTimestamp(),
+    }).commit();
+  } catch (error) {
+    if (typeof error === "object" && error && "code" in error && error.code === "permission-denied") throw new Error("The access code is incorrect.");
+    throw error;
+  }
 }

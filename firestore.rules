@@ -9,6 +9,12 @@ service cloud.firestore {
     function memberPath(boardId, userId) {
       return /databases/$(database)/documents/workspaces/$(boardId)/members/$(userId);
     }
+    function accessPath(boardId) {
+      return /databases/$(database)/documents/workspaces/$(boardId)/_private/access;
+    }
+    function userMembershipPath(boardId, userId) {
+      return /databases/$(database)/documents/users/$(userId)/boardMemberships/$(boardId);
+    }
     function postPath(boardId, postId) {
       return /databases/$(database)/documents/workspaces/$(boardId)/posts/$(postId);
     }
@@ -17,6 +23,43 @@ service cloud.firestore {
     }
     function isMember(boardId) {
       return signedIn() && exists(memberPath(boardId, request.auth.uid));
+    }
+    function validOwnerMember(member, userId) {
+      return member.keys().hasOnly(['userId', 'name', 'photoURL', 'role', 'joinedAt'])
+        && member.userId == userId
+        && member.name is string && member.name.size() > 0 && member.name.size() <= 80
+        && (member.photoURL == null || member.photoURL is string)
+        && member.role == 'owner'
+        && member.joinedAt == request.time;
+    }
+    function validInitialUserMembership(membership, boardId, userId) {
+      return membership.keys().hasOnly(['boardId', 'role', 'joinedAt'])
+        && membership.boardId == boardId
+        && membership.role == 'owner'
+        && membership.joinedAt == request.time;
+    }
+    function validAccessCode(access) {
+      return access.keys().hasOnly(['accessCode', 'createdAt'])
+        && access.accessCode is string && access.accessCode.size() >= 6 && access.accessCode.size() <= 128
+        && access.createdAt == request.time;
+    }
+    function validBoardCreation(boardId) {
+      return request.resource.data.keys().hasOnly(['name', 'createdByName', 'createdAt', 'memberCount'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+        && request.resource.data.createdByName is string && request.resource.data.createdByName.size() > 0 && request.resource.data.createdByName.size() <= 80
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.memberCount == 1
+        && validOwnerMember(getAfter(memberPath(boardId, request.auth.uid)).data, request.auth.uid)
+        && validAccessCode(getAfter(accessPath(boardId)).data)
+        && validInitialUserMembership(getAfter(userMembershipPath(boardId, request.auth.uid)).data, boardId, request.auth.uid);
+    }
+    function validJoinRequest(requestData, userId) {
+      return requestData.keys().hasOnly(['userId', 'name', 'photoURL', 'accessCode', 'requestedAt'])
+        && requestData.userId == userId
+        && requestData.name is string && requestData.name.size() > 0 && requestData.name.size() <= 80
+        && (requestData.photoURL == null || requestData.photoURL is string)
+        && requestData.accessCode is string && requestData.accessCode.size() >= 6 && requestData.accessCode.size() <= 128
+        && requestData.requestedAt == request.time;
     }
     function validAuthor(author) {
       return author.keys().hasOnly(['uid', 'name', 'photoURL'])
@@ -94,22 +137,48 @@ service cloud.firestore {
 
     match /users/{userId}/boardMemberships/{boardId} {
       allow read: if signedIn() && userId == request.auth.uid;
-      allow write: if false;
+      allow create: if signedIn() && userId == request.auth.uid
+        && !exists(boardPath(boardId))
+        && validInitialUserMembership(request.resource.data, boardId, userId)
+        && getAfter(boardPath(boardId)).data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /workspaces/{boardId} {
       // The board document deliberately contains only directory-safe metadata.
       allow get, list: if signedIn();
-      allow create, update, delete: if false;
+      allow create: if signedIn() && validBoardCreation(boardId);
+      allow update, delete: if false;
 
-      match /_private/{document=**} {
-        allow read, write: if false;
+      match /_private/access {
+        allow create: if signedIn() && !exists(boardPath(boardId))
+          && validAccessCode(request.resource.data)
+          && getAfter(boardPath(boardId)).data.createdAt == request.time
+          && validOwnerMember(getAfter(memberPath(boardId, request.auth.uid)).data, request.auth.uid)
+          && validInitialUserMembership(getAfter(userMembershipPath(boardId, request.auth.uid)).data, boardId, request.auth.uid);
+        allow read, update, delete: if false;
       }
 
       match /members/{userId} {
         // This enables a signed-in user to determine only their own memberships.
         allow get, list: if signedIn() && userId == request.auth.uid;
-        allow create, update, delete: if false;
+        allow create: if signedIn() && userId == request.auth.uid
+          && !exists(boardPath(boardId))
+          && validOwnerMember(request.resource.data, userId)
+          && getAfter(boardPath(boardId)).data.createdAt == request.time
+          && validAccessCode(getAfter(accessPath(boardId)).data)
+          && validInitialUserMembership(getAfter(userMembershipPath(boardId, userId)).data, boardId, userId);
+        allow update, delete: if false;
+      }
+
+      match /joinRequests/{userId} {
+        allow create: if signedIn() && userId == request.auth.uid
+          && exists(boardPath(boardId))
+          && exists(accessPath(boardId))
+          && !exists(memberPath(boardId, userId))
+          && validJoinRequest(request.resource.data, userId)
+          && request.resource.data.accessCode == get(accessPath(boardId)).data.accessCode;
+        allow read, update, delete: if false;
       }
 
       match /posts/{postId} {

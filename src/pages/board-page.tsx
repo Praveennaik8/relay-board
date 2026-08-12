@@ -25,27 +25,29 @@ export function BoardPage({ user }: { user: User }) {
 
   if (!boardId || board === null) return <StatusPage title="Board not found" description="This board may no longer exist." />;
   if (board === undefined || membership === undefined) return <StatusPage title="Opening board…" />;
-  if (!membership) return <JoinBoardPage board={board} />;
+  if (!membership) return <JoinBoardPage board={board} user={user} />;
   return <WorkspacePage user={user} board={board} />;
 }
 
-function JoinBoardPage({ board }: { board: Board }) {
+function JoinBoardPage({ board, user }: { board: Board; user: User }) {
   const [accessCode, setAccessCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [joinRequested, setJoinRequested] = useState(false);
   const { toast } = useToast();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await joinBoard(board.id, accessCode);
+      await joinBoard(board.id, accessCode, user);
       setAccessCode("");
+      setJoinRequested(true);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not join board.", "error");
     } finally { setSubmitting(false); }
   }
 
-  return <main className="grid min-h-screen place-items-center bg-[#f8fafc] p-6"><section className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm"><Link to="/boards" className="flex items-center gap-2 font-semibold tracking-tight text-slate-900"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#1a73e8] text-white"><MessageSquareText className="h-4 w-4" /></span>RelayBoard</Link><p className="mt-8 text-sm font-medium text-[#185abc]">Join board</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{board.name}</h1><p className="mt-3 text-sm leading-6 text-slate-600">Enter the access code from the board owner to see posts and join the conversation.</p><form className="mt-6 grid gap-4" onSubmit={submit}><label className="grid gap-1.5 text-sm font-medium">Access code<input value={accessCode} onChange={(event) => setAccessCode(event.target.value)} minLength={6} maxLength={128} type="password" autoFocus className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" required /></label><Button type="submit" disabled={submitting}>{submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}Join board</Button></form><Link to="/boards" className="mt-5 inline-block text-sm text-[#185abc] hover:underline">Back to all boards</Link></section></main>;
+  return <main className="grid min-h-screen place-items-center bg-[#f8fafc] p-6"><section className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm"><Link to="/boards" className="flex items-center gap-2 font-semibold tracking-tight text-slate-900"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#1a73e8] text-white"><MessageSquareText className="h-4 w-4" /></span>RelayBoard</Link><p className="mt-8 text-sm font-medium text-[#185abc]">Join board</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{board.name}</h1><p className="mt-3 text-sm leading-6 text-slate-600">Enter the access code from the board owner to see posts and join the conversation.</p><form className="mt-6 grid gap-4" onSubmit={submit}><label className="grid gap-1.5 text-sm font-medium">Access code<input value={accessCode} onChange={(event) => setAccessCode(event.target.value)} minLength={6} maxLength={128} type="password" autoFocus className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" required disabled={joinRequested} /></label><Button type="submit" disabled={submitting || joinRequested}>{submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{joinRequested ? "Joining board…" : "Join board"}</Button></form>{joinRequested && <p className="mt-3 text-sm text-muted-foreground">Access accepted. Finishing your join…</p>}<Link to="/boards" className="mt-5 inline-block text-sm text-[#185abc] hover:underline">Back to all boards</Link></section></main>;
 }
 
 function StatusPage({ title, description }: { title: string; description?: string }) {

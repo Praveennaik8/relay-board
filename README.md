@@ -1,11 +1,11 @@
 # RelayBoard
 
-RelayBoard is a realtime multi-board communication app built with Firebase. The React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK; trusted Cloud Functions create boards, validate access codes, and recursively clean up post subcollections after a post is deleted.
+RelayBoard is a realtime multi-board communication app built with Firebase. The React client talks directly to Firebase Authentication and Cloud Firestore through the modular Firebase Web SDK; internal Firestore-triggered Cloud Functions complete approved board joins and recursively clean up post subcollections after a post is deleted.
 
 ## Highlights
 
 - Google sign-in, a discoverable board directory, and a compact user profile
-- Access-code-gated board membership, validated by a trusted Cloud Function
+- Access-code-gated board membership, completed by an internal Firestore trigger
 - Realtime board feeds powered by `onSnapshot`
 - Six post types: Issue, Activity, Tip, Announcement, Lost & Found, and Poll
 - Type-specific actions, protected from duplicate responses with an atomic Firestore transaction
@@ -25,7 +25,7 @@ src/
   pages/            Sign-in, board directory, and board routes
   services/         Firebase Authentication and Firestore operations
   types/            Shared data model and post/action metadata
-functions/          Board create/join and Firestore cleanup functions
+functions/          Internal board-join and Firestore cleanup triggers
 ```
 
 `services/posts.service.ts` contains all Firestore writes and listeners. UI components never assemble Firestore paths or run transactions themselves. The feed is a direct `onSnapshot` listener ordered by `createdAt`; choosing a post-type tab adds a Firestore `where` filter. Comments are independently subscribed when opened. Action writes use `runTransaction` to create one action document per user and update the denormalized count in the same atomic commit.
@@ -40,7 +40,7 @@ workspaces/{workspaceId}
   members/{userId}
     userId, name, photoURL, role: "owner" | "member", joinedAt
   _private/access
-    salt, accessCodeHash
+    accessCode
   posts/{postId}
     type: "issue" | "activity" | "tip" | "announcement" | "lost-found" | "poll"
     title, description
@@ -109,7 +109,7 @@ Set the same `VITE_FIREBASE_*` values in the build environment used for Hosting.
 
 ## Security model
 
-Any authenticated user can list board cards, but only board members can read posts, comments, actions, or membership data. Creating boards and joining them happen through callable Cloud Functions. Access codes are salted and hashed in a private document that client security rules deny completely; five failed attempts from the same account are throttled for 15 minutes. Members can create posts and comments, update/delete only their own posts, and respond only once. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
+Any authenticated user can list board cards, but only board members can read posts, comments, actions, or membership data. A board creator writes the board and its access code in one security-rule-validated batch. The plain access code is stored in a private document that client security rules deny completely. A join request is accepted only when Firestore Rules compare its submitted code to that private document; an internal Firestore trigger then creates membership and removes the temporary request. Members can create posts and comments, update/delete only their own posts, and respond only once. The rules require the matching action document and its one-count increment to be committed together, which prevents standalone counter manipulation and duplicate responses.
 
 ## Disappearing posts
 
